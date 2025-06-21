@@ -5,61 +5,58 @@ import os
 TOKEN = os.getenv("TOKEN")
 
 bot = telebot.TeleBot(TOKEN)
-user_data = {}
+
+users_data = {}
 
 @bot.message_handler(commands=['start'])
-def start_message(message):
+def send_welcome(message):
     user_id = message.chat.id
-    user_data[user_id] = {}
-    bot.send_message(user_id, "⚡️ خوش اومدی به speedbot!")
+    users_data[user_id] = {}
+    bot.send_message(user_id, "⚡️ خوش اومدی به speedbot!
+لطفاً اسم کاملت رو وارد کن:")
 
-    msg = bot.send_message(user_id, "👤 لطفاً نام خود را وارد کنید:")
-    bot.register_next_step_handler(msg, process_name)
-
-def process_name(message):
+@bot.message_handler(func=lambda message: True)
+def handle_all(message):
     user_id = message.chat.id
-    user_data[user_id]['name'] = message.text
 
-    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
-    markup.add("OpenVPN")
-    msg = bot.send_message(user_id, "🛍 لطفاً محصول مورد نظر را انتخاب کنید:", reply_markup=markup)
-    bot.register_next_step_handler(msg, process_product)
+    if user_id not in users_data or "name" not in users_data[user_id]:
+        users_data[user_id]["name"] = message.text
+        markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+        markup.add("OpenVPN")
+        bot.send_message(user_id, "محصول مورد نظرت رو انتخاب کن:", reply_markup=markup)
+        return
 
-def process_product(message):
+    if "product" not in users_data[user_id]:
+        if message.text not in ["OpenVPN"]:
+            bot.send_message(user_id, "لطفاً یک محصول معتبر انتخاب کن.")
+            return
+        users_data[user_id]["product"] = message.text
+        bot.send_message(user_id, "چه تعدادی می‌خوای؟")
+        return
+
+    if "quantity" not in users_data[user_id]:
+        if not message.text.isdigit():
+            bot.send_message(user_id, "لطفاً فقط عدد وارد کن.")
+            return
+        users_data[user_id]["quantity"] = int(message.text)
+        total = users_data[user_id]["quantity"] * 110000
+        users_data[user_id]["total"] = total
+        bot.send_message(user_id, f"💰 مبلغ قابل پرداخت: {total:,} تومان
+لطفاً عکس رسید پرداختی رو ارسال کن.")
+        return
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
     user_id = message.chat.id
-    user_data[user_id]['product'] = message.text
+    photo_id = message.photo[-1].file_id
+    caption = f"""📩 فیش واریزی از طرف کاربر: {user_id}
+🧾 نام: {users_data[user_id].get("name")}
+📦 محصول: {users_data[user_id].get("product")}
+🔢 تعداد: {users_data[user_id].get("quantity")}
+💰 مبلغ: {users_data[user_id].get("total"):,} تومان"""
 
-    msg = bot.send_message(user_id, "🔢 تعداد مورد نیاز را وارد کنید:")
-    bot.register_next_step_handler(msg, process_quantity)
+    admin_id = os.getenv("ADMIN_ID")
+    bot.send_photo(admin_id, photo_id, caption=caption)
+    bot.send_message(user_id, "✅ رسیدت ارسال شد و بعد از تأیید، فایل برات ارسال می‌شه.")
 
-def process_quantity(message):
-    user_id = message.chat.id
-    try:
-        quantity = int(message.text)
-        total = quantity * 110000
-        user_data[user_id]['quantity'] = quantity
-        user_data[user_id]['total'] = total
-        bot.send_message(user_id, f"💰 مبلغ قابل پرداخت: {total:,} تومان")
-        msg = bot.send_message(user_id, "🧾 لطفاً فیش واریزی را ارسال کنید:")
-        bot.register_next_step_handler(msg, handle_receipt)
-    except ValueError:
-        msg = bot.send_message(user_id, "❌ لطفاً یک عدد معتبر وارد کنید:")
-        bot.register_next_step_handler(msg, process_quantity)
-
-def handle_receipt(message):
-    user_id = message.chat.id
-    if message.photo:
-        admin_id = os.getenv("ADMIN_ID")
-        caption = f"📩 فیش واریزی از طرف کاربر:
-
-👤 نام: {user_data[user_id]['name']}
-📦 محصول: {user_data[user_id]['product']}
-🔢 تعداد: {user_data[user_id]['quantity']}
-💳 مبلغ: {user_data[user_id]['total']:,} تومان"
-        bot.send_photo(admin_id, message.photo[-1].file_id, caption=caption)
-        bot.send_message(user_id, "✅ فیش شما با موفقیت ارسال شد. منتظر تایید ادمین بمانید.")
-    else:
-        msg = bot.send_message(user_id, "❌ لطفاً تصویر فیش را ارسال کنید:")
-        bot.register_next_step_handler(msg, handle_receipt)
-
-bot.infinity_polling()
+bot.polling()

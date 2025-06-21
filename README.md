@@ -1,2 +1,2 @@
 # SpeedBot
-A simple Telegram bot to sell OpenVPN.
+ربات ساده برای خرید محصول OpenVPN و دریافت رسید پرداخت.
