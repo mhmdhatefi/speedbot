@@ -1,2 +1,3 @@
-# speedbot
-Telegram bot to sell openv
+# SpeedBot
+
+Telegram bot to sell OpenVPN access.
