@@ -1,3 +1,2 @@
 # SpeedBot
-
-Telegram bot to sell OpenVPN access.
+A simple Telegram bot to sell OpenVPN.
