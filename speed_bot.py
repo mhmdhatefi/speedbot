@@ -1,53 +1,65 @@
 import telebot
+from telebot import types
+import os
 
-# توکن واقعی رباتت رو اینجا بذار
-TOKEN = "7930430070:AAH8BFS7KtRdJQvXnpN9FwY8JBYy5TDfkyI"
+TOKEN = os.getenv("TOKEN")
+
 bot = telebot.TeleBot(TOKEN)
-
-# ذخیره‌سازی اطلاعات کاربران
 user_data = {}
 
-# شروع گفتگو
 @bot.message_handler(commands=['start'])
-def handle_start(message):
+def start_message(message):
     user_id = message.chat.id
     user_data[user_id] = {}
-    bot.send_message(user_id, "⚡️ خوش اومدی به speedbot!
+    bot.send_message(user_id, "⚡️ خوش اومدی به speedbot!")
 
-لطفاً اسم کاملت رو وارد کن:")
+    msg = bot.send_message(user_id, "👤 لطفاً نام خود را وارد کنید:")
+    bot.register_next_step_handler(msg, process_name)
 
-# دریافت نام
-@bot.message_handler(func=lambda msg: user_data.get(msg.chat.id) and "name" not in user_data[msg.chat.id])
-def get_name(message):
+def process_name(message):
     user_id = message.chat.id
-    user_data[user_id]["name"] = message.text.strip()
-    bot.send_message(user_id, "🛍 لطفاً محصول مورد نظرت رو انتخاب کن:
+    user_data[user_id]['name'] = message.text
 
-فقط یک گزینه موجوده:
-1. OpenVPN - تک کاربره - نامحدود - قیمت: ۱۱۰ هزار تومان")
+    markup = types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
+    markup.add("OpenVPN")
+    msg = bot.send_message(user_id, "🛍 لطفاً محصول مورد نظر را انتخاب کنید:", reply_markup=markup)
+    bot.register_next_step_handler(msg, process_product)
 
-# دریافت تعداد
-@bot.message_handler(func=lambda msg: user_data.get(msg.chat.id) and "name" in user_data[msg.chat.id] and "count" not in user_data[msg.chat.id])
-def get_quantity(message):
+def process_product(message):
+    user_id = message.chat.id
+    user_data[user_id]['product'] = message.text
+
+    msg = bot.send_message(user_id, "🔢 تعداد مورد نیاز را وارد کنید:")
+    bot.register_next_step_handler(msg, process_quantity)
+
+def process_quantity(message):
     user_id = message.chat.id
     try:
-        count = int(message.text.strip())
-        user_data[user_id]["count"] = count
-        total = 110000 * count
-        bot.send_message(user_id, f"💰 مبلغ قابل پرداخت: {total:,} تومان
-
-لطفاً فیش واریزی رو به صورت عکس ارسال کن.")
+        quantity = int(message.text)
+        total = quantity * 110000
+        user_data[user_id]['quantity'] = quantity
+        user_data[user_id]['total'] = total
+        bot.send_message(user_id, f"💰 مبلغ قابل پرداخت: {total:,} تومان")
+        msg = bot.send_message(user_id, "🧾 لطفاً فیش واریزی را ارسال کنید:")
+        bot.register_next_step_handler(msg, handle_receipt)
     except ValueError:
-        bot.send_message(user_id, "❌ لطفاً تعداد را به صورت عدد وارد کن.")
+        msg = bot.send_message(user_id, "❌ لطفاً یک عدد معتبر وارد کنید:")
+        bot.register_next_step_handler(msg, process_quantity)
 
-# دریافت فیش پرداختی
-@bot.message_handler(content_types=['photo'])
 def handle_receipt(message):
     user_id = message.chat.id
-    file_id = message.photo[-1].file_id
-    bot.send_message(user_id, "✅ فیش با موفقیت دریافت شد. منتظر تأیید ادمین باش.")
-    admin_id = "ADMIN_ID"
-    bot.send_photo(admin_id, file_id, caption=f"💳 فیش جدید از طرف {user_data.get(user_id, {}).get('name', 'کاربر')} 
-UserID: {user_id}")
+    if message.photo:
+        admin_id = os.getenv("ADMIN_ID")
+        caption = f"📩 فیش واریزی از طرف کاربر:
 
-bot.polling()
+👤 نام: {user_data[user_id]['name']}
+📦 محصول: {user_data[user_id]['product']}
+🔢 تعداد: {user_data[user_id]['quantity']}
+💳 مبلغ: {user_data[user_id]['total']:,} تومان"
+        bot.send_photo(admin_id, message.photo[-1].file_id, caption=caption)
+        bot.send_message(user_id, "✅ فیش شما با موفقیت ارسال شد. منتظر تایید ادمین بمانید.")
+    else:
+        msg = bot.send_message(user_id, "❌ لطفاً تصویر فیش را ارسال کنید:")
+        bot.register_next_step_handler(msg, handle_receipt)
+
+bot.infinity_polling()
